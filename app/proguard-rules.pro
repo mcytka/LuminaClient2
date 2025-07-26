@@ -15,4 +15,6 @@
 -keep class com.project.lumina.client.CPPBridge.**  { *; }
 -keep class com.project.lumina.client.constructors.ModuleManager.** {*;}
 -keep class com.project.lumina.client.constructors.GameDataManager.** {*;}
+-keep class net.raphimc.** {*;}
+-keep class io.jsonwebtoken.** {*;}
 
