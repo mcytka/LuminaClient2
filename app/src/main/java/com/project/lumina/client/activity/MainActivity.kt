@@ -62,9 +62,9 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.lifecycleScope
-import com.amplitude.android.Amplitude
-import com.amplitude.android.Configuration
-import com.amplitude.android.DefaultTrackingOptions
+//import com.amplitude.android.Amplitude
+//import com.amplitude.android.Configuration
+//import com.amplitude.android.DefaultTrackingOptions
 import com.project.lumina.client.constructors.ArrayListManager
 import com.project.lumina.client.constructors.GameManager
 import com.project.lumina.client.game.module.api.config.ConfigManagerElement
@@ -75,7 +75,7 @@ import io.netty.util.internal.logging.InternalLoggerFactory
 import io.netty.util.internal.logging.JdkLoggerFactory
 import com.project.lumina.client.constructors.AccountManager
 import com.project.lumina.client.constructors.RealmManager
-import com.project.lumina.client.util.TrackUtil
+//import com.project.lumina.client.util.TrackUtil
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -175,14 +175,14 @@ class MainActivity : ComponentActivity() {
 //
 
 
-        val amplitude = Amplitude(
+        /*val amplitude = Amplitude(
             Configuration(
                 apiKey = TrackUtil.TRACK_API,
                 context = applicationContext,
                 defaultTracking = DefaultTrackingOptions.ALL,
             )
         )
-        amplitude.track("Lumina Mobile")
+        amplitude.track("Lumina Mobile")*/
 
         InternalLoggerFactory.setDefaultFactory(JdkLoggerFactory.INSTANCE)
         Log.i("MainApplication", "Forced Netty to use JUL logger instead of Log4j2.")

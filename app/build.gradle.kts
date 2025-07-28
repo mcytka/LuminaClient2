@@ -148,7 +148,7 @@ dependencies {
     implementation(libs.bcprov)
     implementation(libs.okhttp)
     api(libs.net.raphimc.minecraftauth)
-    implementation("com.amplitude:analytics-android:1.+")
+    //implementation("com.amplitude:analytics-android:1.+")
     implementation("com.github.SmartToolFactory:Compose-Colorful-Sliders:1.2.2")
     implementation("io.coil-kt:coil-compose:2.4.0")
     implementation("com.google.accompanist:accompanist-systemuicontroller:0.30.1")
