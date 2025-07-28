@@ -20,6 +20,9 @@ open class Player(
     val displayName: String
         get() = (metadata[EntityDataTypes.NAME] as? String?)?.ifEmpty { username } ?: username
 
+    open val isBot: Boolean
+        get() = username.isBlank()
+
     override fun onPacketBound(packet: BedrockPacket) {
         super.onPacketBound(packet)
         if (packet is MovePlayerPacket && packet.runtimeEntityId == runtimeEntityId) {
@@ -28,5 +31,4 @@ open class Player(
             tickExists++
         }
     }
-
 }

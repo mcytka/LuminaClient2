@@ -20,6 +20,7 @@ import com.project.lumina.client.game.module.impl.misc.DesyncElement
 import com.project.lumina.client.game.module.impl.world.NoClipElement
 import com.project.lumina.client.game.module.impl.misc.PositionLoggerElement
 import com.project.lumina.client.game.module.impl.misc.SessionInfoElement
+import com.project.lumina.client.game.module.impl.misc.ESPElement
 import com.project.lumina.client.game.module.impl.misc.SpeedoMeterElement
 import com.project.lumina.client.game.module.impl.misc.WaterMarkElement
 import com.project.lumina.client.game.module.impl.motion.AirJumpElement
@@ -133,6 +134,7 @@ object GameManager {
             if (Services.RemisOnline == false){
                 add(SpeedoMeterElement())
                 add(SessionInfoElement())
+                add(ESPElement())
                 add(ArrayListElement())
                 add(WaterMarkElement())
                 add(MinimapElement())

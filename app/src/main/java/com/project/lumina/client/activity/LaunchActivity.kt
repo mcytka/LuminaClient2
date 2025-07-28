@@ -15,7 +15,7 @@ import androidx.core.view.WindowInsetsControllerCompat
 import com.amplitude.android.Amplitude
 import com.amplitude.android.Configuration
 import com.amplitude.android.DefaultTrackingOptions
-import com.google.firebase.crashlytics.FirebaseCrashlytics
+//import com.google.firebase.crashlytics.FirebaseCrashlytics
 //import com.google.firebase.crashlytics.FirebaseCrashlytics
 import com.project.lumina.client.router.launch.AnimatedLauncherScreen
 import com.project.lumina.client.ui.theme.LuminaClientTheme
@@ -47,7 +47,7 @@ class LaunchActivity : ComponentActivity() {
         val verifier = HashCat.getInstance()
         val isValid = verifier.LintHashInit(this)
         if (isValid) {
-            FirebaseCrashlytics.getInstance().log("App started")
+            //FirebaseCrashlytics.getInstance().log("App started")
         }
         WindowCompat.setDecorFitsSystemWindows(window, false)
         WindowInsetsControllerCompat(window, window.decorView).let { controller ->

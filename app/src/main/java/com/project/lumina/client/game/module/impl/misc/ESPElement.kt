@@ -1,123 +1,100 @@
-/*
- * © Project Lumina 2025 — Licensed under GNU GPLv3
- * You are free to use, modify, and redistribute this code under the terms
- * of the GNU General Public License v3. See the LICENSE file for details.
- *
- * ─────────────────────────────────────────────────────────────────────────────
- * This is open source — not open credit.
- *
- * If you're here to build, welcome. If you're here to repaint and reupload
- * with your tag slapped on it… you're not fooling anyone.
- *
- * Changing colors and class names doesn't make you a developer.
- * Copy-pasting isn't contribution.
- *
- * You have legal permission to fork. But ask yourself — are you improving,
- * or are you just recycling someone else's work to feed your ego?
- *
- * Open source isn't about low-effort clones or chasing clout.
- * It's about making things better. Sharper. Cleaner. Smarter.
- *
- * So go ahead, fork it — but bring something new to the table,
- * or don't bother pretending.
- *
- * This message is philosophical. It does not override your legal rights under GPLv3.
- * ─────────────────────────────────────────────────────────────────────────────
- *
- * GPLv3 Summary:
- * - You have the freedom to run, study, share, and modify this software.
- * - If you distribute modified versions, you must also share the source code.
- * - You must keep this license and copyright intact.
- * - You cannot apply further restrictions — the freedom stays with everyone.
- * - This license is irrevocable, and applies to all future redistributions.
- *
- * Full text: https://www.gnu.org/licenses/gpl-3.0.html
- */
-
 package com.project.lumina.client.game.module.impl.misc
 
 import android.util.Log
-import com.project.lumina.client.application.AppContext
+import com.project.lumina.client.R
 import com.project.lumina.client.game.InterceptablePacket
 import com.project.lumina.client.constructors.Element
 import com.project.lumina.client.constructors.CheatCategory
-import com.project.lumina.client.util.AssetManager
 import com.project.lumina.client.game.entity.*
-import com.project.lumina.client.overlay.manager.OverlayManager
-import com.project.lumina.client.ui.opengl.ESPOverlayGLSurface
+import com.project.lumina.client.overlay.mods.ESPOverlay
 import org.cloudburstmc.math.vector.Vector3f
 import org.cloudburstmc.protocol.bedrock.packet.PlayerAuthInputPacket
 
 class ESPElement : Element(
-    name = "esp_module",
+    name = "ESP",
     category = CheatCategory.Misc,
-    displayNameResId = AssetManager.getString("module_esp_display_name")
+    displayNameResId = R.string.module_esp_display_name
 ) {
     private var playersOnly by boolValue("Players", true)
-    private var rangeValue by floatValue("Range", 10f, 2f..100f)
+    private var rangeValue by floatValue("Range", 25f, 2f..500f)
     private var multiTarget = true
     private var maxTargets = 100
-    private var glSurface: ESPOverlayGLSurface? = null
+    private var use3dBoxes by boolValue("Use 3D Boxes", false)
+    private var showPlayerInfo by boolValue("Show Player Info", true)
+    private var showDisappearedPlayers by boolValue("Save Last Player Position Before Disappearance (Must be active to track positions)", false)
 
     override fun onEnabled() {
         super.onEnabled()
         try {
-            if (isSessionCreated && AppContext.instance != null) {
-                glSurface = ESPOverlayGLSurface(AppContext.instance)
-                OverlayManager.showCustomOverlay(glSurface!!)
-                Log.d("ESPModule", "ESP Overlay enabled")
-            } else {
-                println("Session not created or AppContext not available, cannot enable ESP overlay.")
-            }
+            ESPOverlay.showOverlay()
+            Log.d("ESPModule", "ESP Overlay enabled")
         } catch (e: Exception) {
-            println("Error enabling ESP overlay: ${e.message}")
+            Log.e("ESPModule", "Enable error: ${e.message}")
         }
     }
 
     override fun onDisabled() {
         super.onDisabled()
-        glSurface?.let {
-            OverlayManager.dismissCustomOverlay(it)
-            Log.d("ESPModule", "ESP Overlay disabled")
+        ESPOverlay.dismissOverlay()
+        if (isSessionCreated) {
+            session.clearLastKnownPositions()
         }
-        glSurface = null
+        Log.d("ESPModule", "ESP Overlay disabled")
     }
 
     override fun beforePacketBound(interceptablePacket: InterceptablePacket) {
-        if (!isEnabled || !isSessionCreated || interceptablePacket.packet !is PlayerAuthInputPacket) return
+        if (!isEnabled || !isSessionCreated) return
 
-        val packet = interceptablePacket.packet
-        val position = Vector3f.from(packet.position.x, packet.position.y, packet.position.z)
+        val currentLocalPlayer = session.localPlayer
+        if (currentLocalPlayer != null) {
+            val position = currentLocalPlayer.vec3Position
+            val rotationYaw = currentLocalPlayer.rotationYaw
+            val rotationPitch = currentLocalPlayer.rotationPitch
 
-        glSurface?.let {
-            it.updatePlayerPosition(position)
-            it.updateEntities(searchForClosestEntities().map { entity -> entity.vec3Position })
+            ESPOverlay.updatePlayerData(position, rotationPitch, rotationYaw)
+            ESPOverlay.updateEntities(getEntitiesToRender())
+            ESPOverlay.setFov(60.0f)
+            ESPOverlay.setUse3dBoxes(use3dBoxes)
+            ESPOverlay.setShowPlayerInfo(showPlayerInfo)
         }
     }
 
-    private fun searchForClosestEntities(): List<Entity> {
-        val entities = session.level.entityMap.values
-            .mapNotNull {
-                val distance = it.distance(session.localPlayer)
-                if (distance < rangeValue && it.isTarget()) Pair(it, distance) else null
-            }
-            .sortedBy { it.second }
-            .map { it.first }
+    private fun getEntitiesToRender(): List<Entity> {
+        if (!isSessionCreated) return emptyList()
+        val allEntities = session.getAllEntitiesForEsp()
 
-        return if (multiTarget) entities.take(maxTargets) else entities.take(1)
+        return allEntities
+            .filter { entity ->
+                if (entity is LocalPlayer && entity.uniqueEntityId == session.localPlayer.uniqueEntityId) {
+                    false
+                } else {
+                    if (!showDisappearedPlayers && entity.isDisappeared) {
+                        false
+                    } else {
+                        val distance = if (entity.isDisappeared) {
+                            entity.lastKnownPosition.distance(session.localPlayer.vec3Position)
+                        } else {
+                            entity.distance(session.localPlayer)
+                        }
+                        distance < rangeValue && entity.isTarget()
+                    }
+                }
+            }
+            .sortedBy { entity ->
+                if (entity.isDisappeared) {
+                    entity.lastKnownPosition.distance(session.localPlayer.vec3Position)
+                } else {
+                    entity.distance(session.localPlayer)
+                }
+            }
+            .take(maxTargets)
     }
 
     private fun Entity.isTarget(): Boolean {
         return when (this) {
             is LocalPlayer -> false
-            is Player -> playersOnly && !isBot()
+            is Player -> playersOnly && !isBot
             else -> false
         }
-    }
-
-    private fun Player.isBot(): Boolean {
-        if (this is LocalPlayer) return false
-        val playerList = session.level.playerMap[this.uuid] ?: return true
-        return playerList.name.isBlank()
     }
 }

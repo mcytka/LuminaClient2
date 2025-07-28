@@ -116,6 +116,10 @@ open class Entity(open val runtimeEntityId: Long, open val uniqueEntityId: Long)
 
     open val inventory = EntityInventory(this)
 
+    // Added for ESP
+    var lastKnownPosition: Vector3f = Vector3f.ZERO
+    var isDisappeared: Boolean = false
+
     open fun move(x: Float, y: Float, z: Float) {
         this.posX = x
         this.posY = y
@@ -123,6 +127,9 @@ open class Entity(open val runtimeEntityId: Long, open val uniqueEntityId: Long)
         this.motionX = x - prevPosX
         this.motionY = y - prevPosY
         this.motionZ = z - prevPosZ
+        // Update ESP fields
+        lastKnownPosition = Vector3f.from(x, y, z)
+        isDisappeared = false
     }
 
     open fun move(position: Vector3f) {
@@ -191,15 +198,9 @@ open class Entity(open val runtimeEntityId: Long, open val uniqueEntityId: Long)
             handleSetAttribute(packet.attributes)
         } else if (packet is SetEntityLinkPacket) {
             when (packet.entityLink.type) {
-                EntityLinkData.Type.RIDER -> if (packet.entityLink.from == uniqueEntityId) rideEntity =
-                    packet.entityLink.to
-
-                EntityLinkData.Type.REMOVE -> if (packet.entityLink.from == uniqueEntityId) rideEntity =
-                    null
-
-                EntityLinkData.Type.PASSENGER -> if (packet.entityLink.to == uniqueEntityId) rideEntity =
-                    packet.entityLink.from
-
+                EntityLinkData.Type.RIDER -> if (packet.entityLink.from == uniqueEntityId) rideEntity = packet.entityLink.to
+                EntityLinkData.Type.REMOVE -> if (packet.entityLink.from == uniqueEntityId) rideEntity = null
+                EntityLinkData.Type.PASSENGER -> if (packet.entityLink.to == uniqueEntityId) rideEntity = packet.entityLink.from
                 else -> {}
             }
         } else if (packet is MobEffectPacket && packet.runtimeEntityId == runtimeEntityId) {
@@ -213,34 +214,28 @@ open class Entity(open val runtimeEntityId: Long, open val uniqueEntityId: Long)
                         effects.add(Effect(packet.effectId, packet.amplifier, packet.duration))
                     }
                 }
-
-                MobEffectPacket.Event.REMOVE -> getEffectById(packet.effectId)?.let {
-                    effects.remove(
-                        it
-                    )
-                }
-
+                MobEffectPacket.Event.REMOVE -> getEffectById(packet.effectId)?.let { effects.remove(it) }
                 else -> {}
             }
         }
     }
 
-    open fun onDisconnect() {}
+    open fun onDisconnect() {
+        isDisappeared = true // Mark as disappeared for ESP
+    }
 
     fun handleSetData(map: EntityDataMap) {
-        map.forEach { (key, value) ->
-            metadata[key] = value
-        }
+        map.forEach { (key, value) -> metadata[key] = value }
     }
 
     fun handleSetAttribute(attributeList: List<AttributeData>) {
-        attributeList.forEach {
-            attributes[it.name] = it
-        }
+        attributeList.forEach { attributes[it.name] = it }
     }
 
     open fun reset() {
         attributes.clear()
         metadata.clear()
+        lastKnownPosition = Vector3f.ZERO
+        isDisappeared = false
     }
 }
