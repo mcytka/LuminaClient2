@@ -134,7 +134,7 @@ class CustomESPView @JvmOverloads constructor(
             }
 
             if (data.showPlayerInfo && (username != null || distance > 0)) {
-                drawEntityInfo(canvas, paint, username, distance, minX_screen, minY_screen, maxX_screen, maxY_screen)
+                drawEntityInfo(canvas, paint, username, distance, minX_screen, minY_screen, maxX_screen, maxY_screen, renderEntity)
             }
         }
     }
@@ -235,7 +235,8 @@ class CustomESPView @JvmOverloads constructor(
         minX: Float,
         minY: Float,
         maxX: Float,
-        maxY: Float
+        maxY: Float,
+        renderEntity: ESPRenderEntity
     ) {
         val bgPaint = Paint().apply {
             color = AndroidColor.argb(160, 0, 0, 0)
@@ -263,8 +264,8 @@ class CustomESPView @JvmOverloads constructor(
                 if (isNotEmpty()) append(" | ")
                 append("%.1fm".format(distance))
             }
-            if (entity is Player) {
-                val health = entity.attributes["minecraft:health"]?.value ?: 20f
+            if (renderEntity.entity is Player) {
+                val health = renderEntity.entity.attributes["minecraft:health"]?.value ?: 20f
                 if (isNotEmpty()) append(" | ")
                 append("%.1f HP".format(health))
             }

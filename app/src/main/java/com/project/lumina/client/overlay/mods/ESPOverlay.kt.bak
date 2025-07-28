@@ -12,8 +12,6 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.viewinterop.AndroidView
 import com.project.lumina.client.game.entity.Entity
 import com.project.lumina.client.game.entity.Player
-import com.project.lumina.client.overlay.manager.OverlayWindow
-import com.project.lumina.client.overlay.manager.OverlayManager
 import org.cloudburstmc.math.vector.Vector3f
 
 data class ESPRenderEntity(
@@ -31,19 +29,22 @@ data class ESPData(
 )
 
 class ESPOverlay : OverlayWindow() {
-    override val layoutParams by lazy {
-        WindowManager.LayoutParams().apply {
-            type = WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-            flags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                    WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
-                    WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH or
-                    WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
+    private val _layoutParams by lazy {
+        super.layoutParams.apply {
+            flags = flags or
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
+                WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH or
+                WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
             width = WindowManager.LayoutParams.MATCH_PARENT
             height = WindowManager.LayoutParams.MATCH_PARENT
             gravity = Gravity.TOP or Gravity.START
             format = android.graphics.PixelFormat.TRANSLUCENT
         }
     }
+
+    override val layoutParams: WindowManager.LayoutParams
+        get() = _layoutParams
 
     private var playerPosition by mutableStateOf(Vector3f.ZERO)
     private var playerRotation by mutableStateOf(Vector3f.ZERO)
