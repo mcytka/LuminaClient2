@@ -12,18 +12,23 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.viewinterop.AndroidView
 import com.project.lumina.client.game.entity.Entity
 import com.project.lumina.client.game.entity.Player
-import com.project.lumina.client.overlay.OverlayWindow
-import com.project.lumina.client.overlay.OverlayManager
+import com.project.lumina.client.overlay.manager.OverlayWindow
+import com.project.lumina.client.overlay.manager.OverlayManager
 import org.cloudburstmc.math.vector.Vector3f
+
+data class ESPRenderEntity(
+    val entity: Entity,
+    val username: String?
+)
 
 class ESPOverlay : OverlayWindow() {
     private val _layoutParams by lazy {
         super.layoutParams.apply {
             flags = flags or
-                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
-                WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH or
-                WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
+                    WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                    WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
+                    WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH or
+                    WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
             width = WindowManager.LayoutParams.MATCH_PARENT
             height = WindowManager.LayoutParams.MATCH_PARENT
             gravity = Gravity.TOP or Gravity.START
@@ -70,9 +75,14 @@ class ESPOverlay : OverlayWindow() {
 
         fun updateEntities(entityList: List<Entity>) {
             overlayInstance.entities = entityList.map { entity ->
+                val username = if (entity.isDisappeared) {
+                    "GHOST:${(entity as? Player)?.username ?: "Unknown"}"
+                } else {
+                    (entity as? Player)?.username
+                }
                 ESPRenderEntity(
                     entity = entity,
-                    username = if (entity.isDisappeared) "GHOST:${(entity as? Player)?.username ?: "Unknown"}" else (entity as? Player)?.username
+                    username = username
                 )
             }
         }
@@ -114,17 +124,3 @@ class ESPOverlay : OverlayWindow() {
         )
     }
 }
-
-data class ESPRenderEntity(
-    val entity: Entity,
-    val username: String?
-)
-
-data class ESPData(
-    val playerPosition: Vector3f,
-    val playerRotation: Vector3f, // rotation.x = pitch, rotation.y = yaw
-    val entities: List<ESPRenderEntity>,
-    val fov: Float,
-    val use3dBoxes: Boolean,
-    val showPlayerInfo: Boolean
-)

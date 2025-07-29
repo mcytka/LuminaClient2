@@ -8,78 +8,59 @@ import org.cloudburstmc.protocol.bedrock.data.AttributeData
 import org.cloudburstmc.protocol.bedrock.data.entity.EntityDataMap
 import org.cloudburstmc.protocol.bedrock.data.entity.EntityFlag
 import org.cloudburstmc.protocol.bedrock.data.entity.EntityLinkData
-import org.cloudburstmc.protocol.bedrock.packet.BedrockPacket
-import org.cloudburstmc.protocol.bedrock.packet.MobEffectPacket
-import org.cloudburstmc.protocol.bedrock.packet.MoveEntityAbsolutePacket
-import org.cloudburstmc.protocol.bedrock.packet.MoveEntityDeltaPacket
-import org.cloudburstmc.protocol.bedrock.packet.SetEntityDataPacket
-import org.cloudburstmc.protocol.bedrock.packet.SetEntityLinkPacket
-import org.cloudburstmc.protocol.bedrock.packet.UpdateAttributesPacket
+import org.cloudburstmc.protocol.bedrock.packet.*
 import kotlin.math.sqrt
 
 @Suppress("MemberVisibilityCanBePrivate")
-open class Entity(open val runtimeEntityId: Long, open val uniqueEntityId: Long) {
-
+open class Entity(
+    open val runtimeEntityId: Long,
+    open val uniqueEntityId: Long
+) {
     open var posX = 0f
         set(value) {
             prevPosX = field
             field = value
         }
-
     open var posY = 0f
         set(value) {
             prevPosY = field
             field = value
         }
-
     open var posZ = 0f
         set(value) {
             prevPosZ = field
             field = value
         }
-
     open var prevPosX = 0f
         protected set
-
     open var prevPosY = 0f
         protected set
-
     open var prevPosZ = 0f
         protected set
-
     open var rotationYaw = 0f
-
     open var rotationPitch = 0f
-
     open var rotationYawHead = 0f
-
     open var motionX = 0f
         set(value) {
             prevMotionX = field
             field = value
         }
-
     open var motionY = 0f
         set(value) {
             prevMotionY = field
             field = value
         }
-
     open var motionZ = 0f
         set(value) {
             prevMotionZ = field
             field = value
         }
-
     open var prevMotionX = 0f
         protected set
-
     open var prevMotionY = 0f
         protected set
-
     open var prevMotionZ = 0f
         protected set
-
     open var tickExists = 0L
         protected set(value) {
             effects.forEach {
@@ -87,37 +68,29 @@ open class Entity(open val runtimeEntityId: Long, open val uniqueEntityId: Long)
             }
             field = value
         }
-
     var rideEntity: Long? = null
-
     open val attributes = mutableMapOf<String, AttributeData>()
-
     open val metadata = EntityDataMap()
-
     private val effects = mutableListOf<Effect>()
-
-    var lastKnownPosition: Vector3f = Vector3f.ZERO
-    var isDisappeared: Boolean = false
-
     val vec3Position: Vector3f
         get() = Vector3f.from(posX, posY, posZ)
-
     val vec3Rotation: Vector3f
         get() = Vector3f.from(rotationPitch, rotationYaw, rotationYawHead)
 
     open val isSneaking: Boolean
         get() = metadata.flags.contains(EntityFlag.SNEAKING)
-
     open val isSprinting: Boolean
         get() = metadata.flags.contains(EntityFlag.SPRINTING)
-
     open val isSwimming: Boolean
         get() = metadata.flags.contains(EntityFlag.SWIMMING)
-
     open val isGliding: Boolean
         get() = metadata.flags.contains(EntityFlag.GLIDING)
 
     open val inventory = EntityInventory(this)
+
+    // === ESP-специфичные поля ===
+    var lastKnownPosition: Vector3f = Vector3f.ZERO
+    var isDisappeared: Boolean = false
 
     open fun move(x: Float, y: Float, z: Float) {
         this.posX = x
@@ -158,69 +131,64 @@ open class Entity(open val runtimeEntityId: Long, open val uniqueEntityId: Long)
     }
 
     fun distanceSq(entity: Entity) = distanceSq(entity.posX, entity.posY, entity.posZ)
-
     fun distanceSq(vector3f: Vector3f) = distanceSq(vector3f.x, vector3f.y, vector3f.z)
 
     fun distance(x: Float, y: Float, z: Float) = sqrt(distanceSq(x, y, z))
-
     fun distance(entity: Entity) = distance(entity.posX, entity.posY, entity.posZ)
-
     fun distance(vector3f: Vector3f) = distance(vector3f.x, vector3f.y, vector3f.z)
 
-    fun getEffectById(id: Int): Effect? {
-        return effects.find { it.id == id }
-    }
+    fun getEffectById(id: Int): Effect? = effects.find { it.id == id }
 
     open fun onPacketBound(packet: BedrockPacket) {
-        if (packet is MoveEntityAbsolutePacket && packet.runtimeEntityId == runtimeEntityId) {
-            move(packet.position)
-            rotate(packet.rotation)
-            tickExists++
-            lastKnownPosition = packet.position
-            isDisappeared = false
-        } else if (packet is MoveEntityDeltaPacket && packet.runtimeEntityId == runtimeEntityId) {
-            move(
-                if (packet.flags.contains(MoveEntityDeltaPacket.Flag.HAS_X)) packet.x else posX,
-                if (packet.flags.contains(MoveEntityDeltaPacket.Flag.HAS_Y)) packet.y else posY,
-                if (packet.flags.contains(MoveEntityDeltaPacket.Flag.HAS_Z)) packet.z else posZ
-            )
-            rotate(
-                rotationYaw + if (packet.flags.contains(MoveEntityDeltaPacket.Flag.HAS_YAW)) packet.yaw else 0f,
-                rotationPitch + if (packet.flags.contains(MoveEntityDeltaPacket.Flag.HAS_PITCH)) packet.pitch else 0f,
-                rotationYawHead + if (packet.flags.contains(MoveEntityDeltaPacket.Flag.HAS_HEAD_YAW)) packet.headYaw else 0f
-            )
-            tickExists++
-            lastKnownPosition = Vector3f.from(posX, posY, posZ)
-            isDisappeared = false
-        } else if (packet is SetEntityDataPacket && packet.runtimeEntityId == runtimeEntityId) {
-            handleSetData(packet.metadata)
-        } else if (packet is UpdateAttributesPacket && packet.runtimeEntityId == runtimeEntityId) {
-            handleSetAttribute(packet.attributes)
-        } else if (packet is SetEntityLinkPacket) {
-            when (packet.entityLink.type) {
-                EntityLinkData.Type.RIDER -> if (packet.entityLink.from == uniqueEntityId) rideEntity =
-                    packet.entityLink.to
-                EntityLinkData.Type.REMOVE -> if (packet.entityLink.from == uniqueEntityId) rideEntity =
-                    null
-                EntityLinkData.Type.PASSENGER -> if (packet.entityLink.to == uniqueEntityId) rideEntity =
-                    packet.entityLink.from
-                else -> {}
+        when (packet) {
+            is MoveEntityAbsolutePacket -> if (packet.runtimeEntityId == runtimeEntityId) {
+                move(packet.position)
+                rotate(packet.rotation)
+                tickExists++
+                lastKnownPosition = packet.position
+                isDisappeared = false
             }
-        } else if (packet is MobEffectPacket && packet.runtimeEntityId == runtimeEntityId) {
-            when (packet.event) {
-                MobEffectPacket.Event.ADD, MobEffectPacket.Event.MODIFY -> {
-                    val currentEffect = getEffectById(packet.effectId)
-                    if (currentEffect != null) {
-                        currentEffect.amplifier = packet.amplifier
-                        currentEffect.duration = packet.duration
-                    } else {
-                        effects.add(Effect(packet.effectId, packet.amplifier, packet.duration))
+            is MoveEntityDeltaPacket -> if (packet.runtimeEntityId == runtimeEntityId) {
+                move(
+                    if (packet.flags.contains(MoveEntityDeltaPacket.Flag.HAS_X)) packet.x else posX,
+                    if (packet.flags.contains(MoveEntityDeltaPacket.Flag.HAS_Y)) packet.y else posY,
+                    if (packet.flags.contains(MoveEntityDeltaPacket.Flag.HAS_Z)) packet.z else posZ
+                )
+                rotate(
+                    rotationYaw + if (packet.flags.contains(MoveEntityDeltaPacket.Flag.HAS_YAW)) packet.yaw else 0f,
+                    rotationPitch + if (packet.flags.contains(MoveEntityDeltaPacket.Flag.HAS_PITCH)) packet.pitch else 0f,
+                    rotationYawHead + if (packet.flags.contains(MoveEntityDeltaPacket.Flag.HAS_HEAD_YAW)) packet.headYaw else 0f
+                )
+                tickExists++
+                lastKnownPosition = Vector3f.from(posX, posY, posZ)
+                isDisappeared = false
+            }
+            is SetEntityDataPacket -> if (packet.runtimeEntityId == runtimeEntityId) {
+                handleSetData(packet.metadata)
+            }
+            is UpdateAttributesPacket -> if (packet.runtimeEntityId == runtimeEntityId) {
+                handleSetAttribute(packet.attributes)
+            }
+            is SetEntityLinkPacket -> {
+                when (packet.entityLink.type) {
+                    EntityLinkData.Type.RIDER -> if (packet.entityLink.from == uniqueEntityId) rideEntity = packet.entityLink.to
+                    EntityLinkData.Type.REMOVE -> if (packet.entityLink.from == uniqueEntityId) rideEntity = null
+                    EntityLinkData.Type.PASSENGER -> if (packet.entityLink.to == uniqueEntityId) rideEntity = packet.entityLink.from
+                }
+            }
+            is MobEffectPacket -> if (packet.runtimeEntityId == runtimeEntityId) {
+                when (packet.event) {
+                    MobEffectPacket.Event.ADD, MobEffectPacket.Event.MODIFY -> {
+                        val current = getEffectById(packet.effectId)
+                        if (current != null) {
+                            current.amplifier = packet.amplifier
+                            current.duration = packet.duration
+                        } else {
+                            effects.add(Effect(packet.effectId, packet.amplifier, packet.duration))
+                        }
                     }
+                    MobEffectPacket.Event.REMOVE -> getEffectById(packet.effectId)?.let { effects.remove(it) }
                 }
-                MobEffectPacket.Event.REMOVE -> getEffectById(packet.effectId)?.let {
-                    effects.remove(it)
-                }
-                else -> {}
             }
         }
     }
@@ -228,15 +196,11 @@ open class Entity(open val runtimeEntityId: Long, open val uniqueEntityId: Long)
     open fun onDisconnect() {}
 
     fun handleSetData(map: EntityDataMap) {
-        map.forEach { (key, value) ->
-            metadata[key] = value
-        }
+        map.forEach { (key, value) -> metadata[key] = value }
     }
 
     fun handleSetAttribute(attributeList: List<AttributeData>) {
-        attributeList.forEach {
-            attributes[it.name] = it
-        }
+        attributeList.forEach { attributes[it.name] = it }
     }
 
     open fun reset() {
@@ -244,5 +208,9 @@ open class Entity(open val runtimeEntityId: Long, open val uniqueEntityId: Long)
         metadata.clear()
         lastKnownPosition = Vector3f.ZERO
         isDisappeared = false
+    }
+
+    override fun toString(): String {
+        return "Entity(entityId=$runtimeEntityId, uniqueId=$uniqueEntityId, posX=$posX, posY=$posY, posZ=$posZ)"
     }
 }

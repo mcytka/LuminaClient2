@@ -34,8 +34,6 @@ import org.cloudburstmc.protocol.bedrock.packet.BedrockPacket
 import org.cloudburstmc.protocol.bedrock.packet.StartGamePacket
 import org.cloudburstmc.protocol.bedrock.packet.TextPacket
 import org.cloudburstmc.protocol.bedrock.packet.PlayerListPacket
-import org.cloudburstmc.protocol.bedrock.packet.LevelEventPacket
-import org.cloudburstmc.protocol.bedrock.packet.SetTimePacket
 import java.util.Collections
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
@@ -111,16 +109,6 @@ class NetBound(val luminaRelaySession: LuminaRelaySession) : ComposedPacketHandl
                     Log.i("GameSession", "Seed: ${gameDataManager.getSeed()}")
                     Log.i("GameSession", "Game Mode: ${gameDataManager.getGameMode()}")
                     Log.i("GameSession", "LevelName: ${gameDataManager.getLevelName()}")
-                    /*
-                    try {
-                        blockMapping = blockMappingProvider.craftMapping(protocolVersion)
-                        itemMapping = itemMappingProvider.craftMapping(protocolVersion)
-                        legacyBlockMapping = legacyBlockMappingProvider.craftMapping(protocolVersion)
-                        Log.i("GameSession", "Loaded mappings for protocol $protocolVersion")
-                    } catch (e: Exception) {
-                        Log.e("GameSession", "Failed to load mappings for protocol $protocolVersion", e)
-                    }
-                    */
                 }
             }
             is PlayerListPacket -> {
@@ -132,11 +120,10 @@ class NetBound(val luminaRelaySession: LuminaRelaySession) : ComposedPacketHandl
         world.onPacket(packet)
         level.onPacketBound(packet)
 
-        // Update last known positions for ESP
+        // Update last known positions for players
         level.entityMap.values.filterIsInstance<Player>().forEach { player ->
             player.uuid?.let { uuid ->
                 lastKnownPlayerPositions[uuid] = player.vec3Position
-                Log.d("NetBound", "Updated position for player: UUID=$uuid, Position=${player.vec3Position}")
             }
         }
 
@@ -152,6 +139,7 @@ class NetBound(val luminaRelaySession: LuminaRelaySession) : ComposedPacketHandl
         }
 
         displayClientMessage("[Lumina V4]", TextPacket.Type.TIP)
+
         return false
     }
 
@@ -165,8 +153,7 @@ class NetBound(val luminaRelaySession: LuminaRelaySession) : ComposedPacketHandl
         localPlayer.onDisconnect()
         level.onDisconnect()
         proxyPlayerNames.clear()
-        lastKnownPlayerPositions.clear()
-        GameManager.clearNetBound()
+        clearLastKnownPositions()
         gameDataManager.clearAllData()
         startGameReceived = false
 
@@ -178,10 +165,11 @@ class NetBound(val luminaRelaySession: LuminaRelaySession) : ComposedPacketHandl
     fun getAllEntitiesForEsp(): List<Entity> {
         val currentEntities = level.entityMap.values.toMutableList()
         val currentActivePlayerUUIDs = currentEntities.filterIsInstance<Player>().mapNotNull { it.uuid }.toSet()
+
         val ghostPlayers = lastKnownPlayerPositions.mapNotNull { (uuid, position) ->
             if (uuid !in currentActivePlayerUUIDs) {
-                val playerInMap = level.playerMap[uuid] ?: gameDataManager.getPlayerByUUID(uuid)
-                val playerName = playerInMap?.name ?: "Unknown"
+                val playerInfo = gameDataManager.getPlayerByUUID(uuid)
+                val playerName = playerInfo?.name ?: "Unknown"
                 val ghostPlayer = Player(0, 0L, uuid, playerName).apply {
                     this.posX = position.x
                     this.posY = position.y
@@ -189,20 +177,16 @@ class NetBound(val luminaRelaySession: LuminaRelaySession) : ComposedPacketHandl
                     this.lastKnownPosition = position
                     this.isDisappeared = true
                 }
-                Log.d("NetBound", "Ghost player: UUID=$uuid, Name=$playerName")
                 ghostPlayer
             } else {
                 null
             }
         }
-        val allEntities = currentEntities + ghostPlayers
-        Log.d("NetBound", "Entities for ESP: ${allEntities.size}, Active: ${currentEntities.size}, Ghosts: ${ghostPlayers.size}")
-        return allEntities
+        return currentEntities + ghostPlayers
     }
 
     fun clearLastKnownPositions() {
         lastKnownPlayerPositions.clear()
-        Log.d("NetBound", "Cleared last known player positions")
     }
 
     fun getStartGameData(): Map<String, Any?> = gameDataManager.getStartGameData()
@@ -368,14 +352,18 @@ class NetBound(val luminaRelaySession: LuminaRelaySession) : ComposedPacketHandl
         try {
             MiniMapOverlay.setCenter(playerPosition.x, playerPosition.y)
             MiniMapOverlay.setPlayerRotation(playerRotation)
+
             MiniMapOverlay.overlayInstance.minimapZoom = minimapZoom
             MiniMapOverlay.overlayInstance.minimapDotSize = minimapDotSize
+
             val targets = entityPositions.values.toList()
+
             val finalTargets = if (targets.isEmpty()) {
                 targets
             } else {
                 targets
             }
+
             MiniMapOverlay.setTargets(finalTargets)
             MiniMapOverlay.showOverlay()
         } catch (e: Exception) {
@@ -397,6 +385,7 @@ class NetBound(val luminaRelaySession: LuminaRelaySession) : ComposedPacketHandl
             MiniMapOverlay.setCenter(centerX, centerZ)
             MiniMapOverlay.setTargets(targets)
             MiniMapOverlay.showOverlay()
+
             minimapEnabled = true
             playerPosition = Position(centerX, centerZ)
         }

@@ -20,6 +20,15 @@ import kotlin.math.sqrt
 import kotlin.math.pow
 import android.util.Log
 
+data class ESPData(
+    val playerPosition: Vector3f,
+    val playerRotation: Vector3f, // rotation.x = pitch, rotation.y = yaw
+    val entities: List<ESPRenderEntity>,
+    val fov: Float,
+    val use3dBoxes: Boolean,
+    val showPlayerInfo: Boolean
+)
+
 class CustomESPView @JvmOverloads constructor(
     context: Context,
     attrs: AttributeSet? = null,
@@ -69,7 +78,7 @@ class CustomESPView @JvmOverloads constructor(
 
         entities.forEach { renderEntity ->
             val entity = renderEntity.entity
-            val username = renderEntity.username
+            val username = renderEntity.username?.let { parseColorCodes(it) } ?: ""
 
             val renderPosition = if (entity.isDisappeared) entity.lastKnownPosition else entity.vec3Position
 
@@ -109,11 +118,7 @@ class CustomESPView @JvmOverloads constructor(
                 screenPos
             }
 
-            if (anyVertexBehindCamera) {
-                return@forEach
-            }
-
-            if (screenPositions.isEmpty()) {
+            if (anyVertexBehindCamera || screenPositions.isEmpty()) {
                 return@forEach
             }
 
@@ -128,7 +133,8 @@ class CustomESPView @JvmOverloads constructor(
             if (maxX_screen <= -margin ||
                 minX_screen >= screenWidth + margin ||
                 maxY_screen <= -margin ||
-                minY_screen >= screenHeight + margin) {
+                minY_screen >= screenHeight + margin
+            ) {
                 return@forEach
             }
 
@@ -148,20 +154,47 @@ class CustomESPView @JvmOverloads constructor(
                 draw2DBox(canvas, paint, minX_screen, minY_screen, maxX_screen, maxY_screen, color)
             }
 
-            if (data.showPlayerInfo) {
-                if (username != null || distance > 0) {
-                    drawEntityInfo(
-                        canvas,
-                        paint,
-                        username,
-                        distance,
-                        minX_screen,
-                        minY_screen,
-                        maxX_screen,
-                        maxY_screen
-                    )
-                }
+            if (data.showPlayerInfo && (username.isNotEmpty() || distance > 0)) {
+                drawEntityInfo(
+                    canvas,
+                    paint,
+                    username,
+                    distance,
+                    minX_screen,
+                    minY_screen,
+                    maxX_screen,
+                    maxY_screen
+                )
             }
+        }
+    }
+
+    private fun parseColorCodes(text: String): String {
+        // Remove Minecraft color codes (e.g., §c, §f) for display
+        return text.replace("§[0-9a-fk-orA-FK-OR]".toRegex(), "")
+    }
+
+    private fun getTextColor(text: String): Int {
+        // Parse Minecraft color codes to determine text color
+        val colorCode = text.substringBefore(":").substringAfterLast("§", "")
+        return when (colorCode.lowercase()) {
+            "0" -> AndroidColor.BLACK
+            "1" -> AndroidColor.BLUE
+            "2" -> AndroidColor.GREEN
+            "3" -> AndroidColor.CYAN
+            "4" -> AndroidColor.RED
+            "5" -> AndroidColor.MAGENTA
+            "6" -> AndroidColor.YELLOW
+            "7" -> AndroidColor.LTGRAY
+            "8" -> AndroidColor.DKGRAY
+            "9" -> AndroidColor.BLUE
+            "a" -> AndroidColor.GREEN
+            "b" -> AndroidColor.CYAN
+            "c" -> AndroidColor.RED
+            "d" -> AndroidColor.MAGENTA
+            "e" -> AndroidColor.YELLOW
+            "f" -> AndroidColor.WHITE
+            else -> AndroidColor.WHITE
         }
     }
 
@@ -230,9 +263,7 @@ class CustomESPView @JvmOverloads constructor(
     }
 
     private fun draw3DBox(canvas: Canvas, paint: Paint, screenPositions: List<Vector2f>) {
-        if (screenPositions.size != 8) {
-            return
-        }
+        if (screenPositions.size != 8) return
 
         paint.style = Paint.Style.STROKE
         paint.strokeWidth = 3f
@@ -262,7 +293,7 @@ class CustomESPView @JvmOverloads constructor(
     private fun drawEntityInfo(
         canvas: Canvas,
         paint: Paint,
-        username: String?,
+        username: String,
         distance: Float,
         minX: Float,
         minY: Float,
@@ -283,14 +314,14 @@ class CustomESPView @JvmOverloads constructor(
         }
 
         val textPaint = Paint().apply {
-            color = AndroidColor.WHITE
+            color = getTextColor(username) // Use color based on Minecraft color code
             textSize = 30f
             textAlign = Paint.Align.CENTER
             style = Paint.Style.FILL
         }
 
         val info = buildString {
-            if (username != null) {
+            if (username.isNotEmpty()) {
                 append(username)
             }
             if (distance > 0) {
