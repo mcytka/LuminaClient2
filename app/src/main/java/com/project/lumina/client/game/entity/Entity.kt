@@ -173,7 +173,9 @@ open class Entity(
                 when (packet.entityLink.type) {
                     EntityLinkData.Type.RIDER -> if (packet.entityLink.from == uniqueEntityId) rideEntity = packet.entityLink.to
                     EntityLinkData.Type.REMOVE -> if (packet.entityLink.from == uniqueEntityId) rideEntity = null
-                    EntityLinkData.Type.PASSENGER -> if (packet.entityLink.to == uniqueEntityId) rideEntity = packet.entityLink.from
+                    EntityLinkData.Type.PASSENGER -> if (packet.entityLink.from == uniqueEntityId) rideEntity = packet.entityLink.from
+                    EntityLinkData.Type.NONE -> {} // Handle NONE explicitly (no action needed)
+                    else -> Log.w("Entity", "Unhandled EntityLinkData.Type: ${packet.entityLink.type}") // Fallback for future-proofing
                 }
             }
             is MobEffectPacket -> if (packet.runtimeEntityId == runtimeEntityId) {
