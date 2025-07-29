@@ -104,8 +104,7 @@ class ESPElement : Element(
 
     private fun Player.isBot(): Boolean {
         if (this is LocalPlayer) return false
-        // Use UUID-based check instead of name-based
-        val playerInfo = session.getPlayerByUUID(this.uuid)
-        return playerInfo == null // If no player info exists for this UUID, consider it a bot
+        val playerList = session.level.playerMap[this.uuid] ?: return true
+        return playerList.name.isBlank()
     }
 }
