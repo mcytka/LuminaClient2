@@ -1,5 +1,6 @@
 package com.project.lumina.client.game.entity
 
+import android.util.Log
 import com.project.lumina.client.game.inventory.EntityInventory
 import com.project.lumina.client.game.utils.constants.Effect
 import org.cloudburstmc.math.vector.Vector2f
@@ -88,7 +89,7 @@ open class Entity(
 
     open val inventory = EntityInventory(this)
 
-    // === ESP-специфичные поля ===
+    // === ESP-specific fields ===
     var lastKnownPosition: Vector3f = Vector3f.ZERO
     var isDisappeared: Boolean = false
 
@@ -174,13 +175,12 @@ open class Entity(
                     EntityLinkData.Type.RIDER -> if (packet.entityLink.from == uniqueEntityId) rideEntity = packet.entityLink.to
                     EntityLinkData.Type.REMOVE -> if (packet.entityLink.from == uniqueEntityId) rideEntity = null
                     EntityLinkData.Type.PASSENGER -> if (packet.entityLink.from == uniqueEntityId) rideEntity = packet.entityLink.from
-                    EntityLinkData.Type.NONE -> {} // Handle NONE explicitly (no action needed)
-                    else -> Log.w("Entity", "Unhandled EntityLinkData.Type: ${packet.entityLink.type}") // Fallback for future-proofing
+                    else -> Log.w("Entity", "Unhandled EntityLinkData.Type: ${packet.entityLink.type}")
                 }
             }
             is MobEffectPacket -> if (packet.runtimeEntityId == runtimeEntityId) {
                 when (packet.event) {
-                    MobEffectPacket.Event.ADD, MobEffectPacket.Event.MODIFY -> {
+                    MobEffectPacket.Event.ADD -> {
                         val current = getEffectById(packet.effectId)
                         if (current != null) {
                             current.amplifier = packet.amplifier
@@ -189,7 +189,15 @@ open class Entity(
                             effects.add(Effect(packet.effectId, packet.amplifier, packet.duration))
                         }
                     }
+                    MobEffectPacket.Event.MODIFY -> {
+                        val current = getEffectById(packet.effectId)
+                        if (current != null) {
+                            current.amplifier = packet.amplifier
+                            current.duration = packet.duration
+                        }
+                    }
                     MobEffectPacket.Event.REMOVE -> getEffectById(packet.effectId)?.let { effects.remove(it) }
+                    MobEffectPacket.Event.NONE -> {} // Handle NONE explicitly
                 }
             }
         }
