@@ -8,6 +8,7 @@ import android.graphics.Paint
 import android.util.AttributeSet
 import android.view.View
 import com.project.lumina.client.game.entity.Entity
+import com.project.lumina.client.game.entity.Item
 import com.project.lumina.client.game.entity.Player
 import com.project.lumina.client.game.entity.LocalPlayer
 import org.cloudburstmc.math.matrix.Matrix4f
@@ -58,12 +59,13 @@ class CustomESPView @JvmOverloads constructor(
             screenWidth / screenHeight,
             0.1f,
             128f
-        ).mul(
-            Matrix4f.createTranslation(playerPosition)
-                .mul(rotateY(-playerYaw - 180f))
-                .mul(rotateX(-playerPitch))
-                .invert()
         )
+            .mul(
+                Matrix4f.createTranslation(playerPosition)
+                    .mul(rotateY(-playerYaw - 180f))
+                    .mul(rotateX(-playerPitch))
+                    .invert()
+            )
 
         entities.forEach { renderEntity ->
             val entity = renderEntity.entity
@@ -83,14 +85,14 @@ class CustomESPView @JvmOverloads constructor(
             val halfDepth = entityWidth / 2f
 
             val boxVertices = arrayOf(
-                Vector3f.from(entityCenterX - halfWidth, entityFeetY, entityCenterZ - halfDepth),
-                Vector3f.from(entityCenterX - halfWidth, entityHeadY, entityCenterZ - halfDepth),
-                Vector3f.from(entityCenterX + halfWidth, entityHeadY, entityCenterZ - halfDepth),
-                Vector3f.from(entityCenterX + halfWidth, entityFeetY, entityCenterZ - halfDepth),
-                Vector3f.from(entityCenterX - halfWidth, entityFeetY, entityCenterZ + halfDepth),
-                Vector3f.from(entityCenterX - halfWidth, entityHeadY, entityCenterZ + halfDepth),
-                Vector3f.from(entityCenterX + halfWidth, entityHeadY, entityCenterZ + halfDepth),
-                Vector3f.from(entityCenterX + halfWidth, entityFeetY, entityCenterZ + halfDepth)
+                Vector3f.from(entityCenterX - halfWidth, entityFeetY, entityCenterZ - halfDepth), // Bottom front left
+                Vector3f.from(entityCenterX - halfWidth, entityHeadY, entityCenterZ - halfDepth), // Top front left
+                Vector3f.from(entityCenterX + halfWidth, entityHeadY, entityCenterZ - halfDepth), // Top front right
+                Vector3f.from(entityCenterX + halfWidth, entityFeetY, entityCenterZ - halfDepth), // Bottom front right
+                Vector3f.from(entityCenterX - halfWidth, entityFeetY, entityCenterZ + halfDepth), // Bottom back left
+                Vector3f.from(entityCenterX - halfWidth, entityHeadY, entityCenterZ + halfDepth), // Top back left
+                Vector3f.from(entityCenterX + halfWidth, entityHeadY, entityCenterZ + halfDepth), // Top back right
+                Vector3f.from(entityCenterX + halfWidth, entityFeetY, entityCenterZ + halfDepth)  // Bottom back right
             )
 
             var minX_screen = screenWidth
@@ -101,11 +103,19 @@ class CustomESPView @JvmOverloads constructor(
 
             val screenPositions = boxVertices.mapNotNull { vertex ->
                 val screenPos = worldToScreen(vertex, viewProjMatrix, screenWidth.toInt(), screenHeight.toInt())
-                if (screenPos == null) anyVertexBehindCamera = true
+                if (screenPos == null) {
+                    anyVertexBehindCamera = true
+                }
                 screenPos
             }
 
-            if (anyVertexBehindCamera || screenPositions.isEmpty()) return@forEach
+            if (anyVertexBehindCamera) {
+                return@forEach
+            }
+
+            if (screenPositions.isEmpty()) {
+                return@forEach
+            }
 
             screenPositions.forEach { screenPos ->
                 minX_screen = minX_screen.coerceAtMost(screenPos.x)
@@ -115,16 +125,21 @@ class CustomESPView @JvmOverloads constructor(
             }
 
             val margin = 10f
-            if (maxX_screen <= -margin || minX_screen >= screenWidth + margin ||
-                maxY_screen <= -margin || minY_screen >= screenHeight + margin) return@forEach
+            if (maxX_screen <= -margin ||
+                minX_screen >= screenWidth + margin ||
+                maxY_screen <= -margin ||
+                minY_screen >= screenHeight + margin) {
+                return@forEach
+            }
 
             val distance = sqrt(
                 (renderPosition.x - playerPosition.x).pow(2) +
-                (renderPosition.y - playerPosition.y).pow(2) +
-                (renderPosition.z - playerPosition.z).pow(2)
+                        (renderPosition.y - playerPosition.y).pow(2) +
+                        (renderPosition.z - playerPosition.z).pow(2)
             ).toFloat()
 
             val color = if (entity.isDisappeared) AndroidColor.argb(150, 255, 0, 255) else getEntityColor(entity)
+
             paint.color = color
 
             if (data.use3dBoxes) {
@@ -133,8 +148,19 @@ class CustomESPView @JvmOverloads constructor(
                 draw2DBox(canvas, paint, minX_screen, minY_screen, maxX_screen, maxY_screen, color)
             }
 
-            if (data.showPlayerInfo && (username != null || distance > 0)) {
-                drawEntityInfo(canvas, paint, username, distance, minX_screen, minY_screen, maxX_screen, maxY_screen, renderEntity)
+            if (data.showPlayerInfo) {
+                if (username != null || distance > 0) {
+                    drawEntityInfo(
+                        canvas,
+                        paint,
+                        username,
+                        distance,
+                        minX_screen,
+                        minY_screen,
+                        maxX_screen,
+                        maxY_screen
+                    )
+                }
             }
         }
     }
@@ -182,13 +208,15 @@ class CustomESPView @JvmOverloads constructor(
     private fun getEntitySize(entity: Entity): Pair<Float, Float> {
         return when (entity) {
             is Player, is LocalPlayer -> Pair(0.6f, 1.8f)
+            is Item -> Pair(0.25f, 0.25f)
             else -> Pair(0.5f, 0.5f)
         }
     }
 
     private fun getEntityColor(entity: Entity): Int {
-        return when (entity) {
-            is Player -> AndroidColor.RED
+        return when {
+            entity is Player -> AndroidColor.RED
+            entity is Item -> AndroidColor.YELLOW
             else -> AndroidColor.CYAN
         }
     }
@@ -202,7 +230,9 @@ class CustomESPView @JvmOverloads constructor(
     }
 
     private fun draw3DBox(canvas: Canvas, paint: Paint, screenPositions: List<Vector2f>) {
-        if (screenPositions.size != 8) return
+        if (screenPositions.size != 8) {
+            return
+        }
 
         paint.style = Paint.Style.STROKE
         paint.strokeWidth = 3f
@@ -212,10 +242,12 @@ class CustomESPView @JvmOverloads constructor(
         drawLine(canvas, paint, screenPositions[3], screenPositions[7])
         drawLine(canvas, paint, screenPositions[7], screenPositions[4])
         drawLine(canvas, paint, screenPositions[4], screenPositions[0])
+
         drawLine(canvas, paint, screenPositions[1], screenPositions[2])
         drawLine(canvas, paint, screenPositions[2], screenPositions[6])
         drawLine(canvas, paint, screenPositions[6], screenPositions[5])
         drawLine(canvas, paint, screenPositions[5], screenPositions[1])
+
         drawLine(canvas, paint, screenPositions[0], screenPositions[1])
         drawLine(canvas, paint, screenPositions[3], screenPositions[2])
         drawLine(canvas, paint, screenPositions[7], screenPositions[6])
@@ -235,8 +267,7 @@ class CustomESPView @JvmOverloads constructor(
         minX: Float,
         minY: Float,
         maxX: Float,
-        maxY: Float,
-        renderEntity: ESPRenderEntity
+        maxY: Float
     ) {
         val bgPaint = Paint().apply {
             color = AndroidColor.argb(160, 0, 0, 0)
@@ -259,15 +290,12 @@ class CustomESPView @JvmOverloads constructor(
         }
 
         val info = buildString {
-            if (username != null) append(username)
+            if (username != null) {
+                append(username)
+            }
             if (distance > 0) {
                 if (isNotEmpty()) append(" | ")
                 append("%.1fm".format(distance))
-            }
-            if (renderEntity.entity is Player) {
-                val health = renderEntity.entity.attributes["minecraft:health"]?.value ?: 20f
-                if (isNotEmpty()) append(" | ")
-                append("%.1f HP".format(health))
             }
         }
 
@@ -287,6 +315,7 @@ class CustomESPView @JvmOverloads constructor(
             textY + padding
         )
         canvas.drawRoundRect(bgRect, 4f, 4f, bgPaint)
+
         canvas.drawText(info, textX, textY, outlinePaint)
         canvas.drawText(info, textX, textY, textPaint)
     }

@@ -12,38 +12,27 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.viewinterop.AndroidView
 import com.project.lumina.client.game.entity.Entity
 import com.project.lumina.client.game.entity.Player
-import com.project.lumina.client.overlay.manager.OverlayWindow
-import com.project.lumina.client.overlay.manager.OverlayManager
+import com.project.lumina.client.overlay.OverlayWindow
+import com.project.lumina.client.overlay.OverlayManager
 import org.cloudburstmc.math.vector.Vector3f
 
-data class ESPRenderEntity(
-    val entity: Entity,
-    val username: String?
-)
-
-data class ESPData(
-    val playerPosition: Vector3f,
-    val playerRotation: Vector3f,
-    val entities: List<ESPRenderEntity>,
-    val fov: Float,
-    val use3dBoxes: Boolean,
-    val showPlayerInfo: Boolean
-)
-
 class ESPOverlay : OverlayWindow() {
-    override val layoutParams by lazy {
-        WindowManager.LayoutParams().apply {
-            type = WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-            flags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                    WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
-                    WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH or
-                    WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
+    private val _layoutParams by lazy {
+        super.layoutParams.apply {
+            flags = flags or
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
+                WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH or
+                WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
             width = WindowManager.LayoutParams.MATCH_PARENT
             height = WindowManager.LayoutParams.MATCH_PARENT
             gravity = Gravity.TOP or Gravity.START
             format = android.graphics.PixelFormat.TRANSLUCENT
         }
     }
+
+    override val layoutParams: WindowManager.LayoutParams
+        get() = _layoutParams
 
     private var playerPosition by mutableStateOf(Vector3f.ZERO)
     private var playerRotation by mutableStateOf(Vector3f.ZERO)
@@ -107,7 +96,9 @@ class ESPOverlay : OverlayWindow() {
 
         AndroidView(
             modifier = Modifier.fillMaxSize(),
-            factory = { context -> CustomESPView(context) },
+            factory = { context ->
+                CustomESPView(context)
+            },
             update = { customView ->
                 customView.updateESPData(
                     ESPData(
@@ -123,3 +114,17 @@ class ESPOverlay : OverlayWindow() {
         )
     }
 }
+
+data class ESPRenderEntity(
+    val entity: Entity,
+    val username: String?
+)
+
+data class ESPData(
+    val playerPosition: Vector3f,
+    val playerRotation: Vector3f, // rotation.x = pitch, rotation.y = yaw
+    val entities: List<ESPRenderEntity>,
+    val fov: Float,
+    val use3dBoxes: Boolean,
+    val showPlayerInfo: Boolean
+)

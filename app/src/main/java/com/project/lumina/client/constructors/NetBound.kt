@@ -3,9 +3,9 @@ package com.project.lumina.client.constructors
 import android.util.Log
 import com.project.lumina.client.application.AppContext
 import com.project.lumina.client.game.InterceptablePacket
+import com.project.lumina.client.game.entity.Entity
 import com.project.lumina.client.game.entity.LocalPlayer
 import com.project.lumina.client.game.entity.Player
-import com.project.lumina.client.game.entity.Entity
 import com.project.lumina.client.game.event.EventManager
 import com.project.lumina.client.game.event.EventPacketInbound
 import com.project.lumina.client.game.registry.BlockMapping
@@ -18,13 +18,13 @@ import com.project.lumina.client.overlay.mods.PacketNotificationOverlay
 import com.project.lumina.client.overlay.mods.Position
 import com.project.lumina.client.overlay.mods.SessionStatsOverlay
 import com.project.lumina.client.overlay.mods.SpeedometerOverlay
-import com.project.lumina.client.overlay.mods.KeystrokesOverlay
-import com.project.lumina.client.overlay.mods.TargetHudOverlay
 import com.project.lumina.relay.LuminaRelaySession
 import com.project.lumina.client.game.registry.ItemMapping
 import com.project.lumina.client.game.registry.ItemMappingProvider
 import com.project.lumina.client.game.registry.LegacyBlockMapping
 import com.project.lumina.client.game.registry.LegacyBlockMappingProvider
+import com.project.lumina.client.overlay.mods.KeystrokesOverlay
+import com.project.lumina.client.overlay.mods.TargetHudOverlay
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -50,6 +50,8 @@ class NetBound(val luminaRelaySession: LuminaRelaySession) : ComposedPacketHandl
     val localPlayer = LocalPlayer(this)
 
     private val proxyPlayerNames: MutableSet<String> = Collections.synchronizedSet(mutableSetOf())
+    private val lastKnownPlayerPositions = ConcurrentHashMap<UUID, Vector3f>()
+
     val gameDataManager = GameDataManager()
 
     val protocolVersion: Int
@@ -86,9 +88,6 @@ class NetBound(val luminaRelaySession: LuminaRelaySession) : ComposedPacketHandl
         ).versionName
     }
 
-    // Added for ESP
-    private val lastKnownPlayerPositions = ConcurrentHashMap<UUID, Vector3f>()
-
     fun clientBound(packet: BedrockPacket) {
         luminaRelaySession.clientBound(packet)
     }
@@ -112,6 +111,16 @@ class NetBound(val luminaRelaySession: LuminaRelaySession) : ComposedPacketHandl
                     Log.i("GameSession", "Seed: ${gameDataManager.getSeed()}")
                     Log.i("GameSession", "Game Mode: ${gameDataManager.getGameMode()}")
                     Log.i("GameSession", "LevelName: ${gameDataManager.getLevelName()}")
+                    /*
+                    try {
+                        blockMapping = blockMappingProvider.craftMapping(protocolVersion)
+                        itemMapping = itemMappingProvider.craftMapping(protocolVersion)
+                        legacyBlockMapping = legacyBlockMappingProvider.craftMapping(protocolVersion)
+                        Log.i("GameSession", "Loaded mappings for protocol $protocolVersion")
+                    } catch (e: Exception) {
+                        Log.e("GameSession", "Failed to load mappings for protocol $protocolVersion", e)
+                    }
+                    */
                 }
             }
             is PlayerListPacket -> {
@@ -123,10 +132,11 @@ class NetBound(val luminaRelaySession: LuminaRelaySession) : ComposedPacketHandl
         world.onPacket(packet)
         level.onPacketBound(packet)
 
-        // Update lastKnownPlayerPositions for ESP
+        // Update last known positions for ESP
         level.entityMap.values.filterIsInstance<Player>().forEach { player ->
-            player.uuid.let { uuid ->
+            player.uuid?.let { uuid ->
                 lastKnownPlayerPositions[uuid] = player.vec3Position
+                Log.d("NetBound", "Updated position for player: UUID=$uuid, Position=${player.vec3Position}")
             }
         }
 
@@ -155,24 +165,23 @@ class NetBound(val luminaRelaySession: LuminaRelaySession) : ComposedPacketHandl
         localPlayer.onDisconnect()
         level.onDisconnect()
         proxyPlayerNames.clear()
+        lastKnownPlayerPositions.clear()
         GameManager.clearNetBound()
         gameDataManager.clearAllData()
         startGameReceived = false
-        clearLastKnownPositions() // Clear ESP positions
+
         for (module in GameManager.elements) {
             module.onDisconnect(reason)
         }
     }
 
-    // Added for ESP
     fun getAllEntitiesForEsp(): List<Entity> {
         val currentEntities = level.entityMap.values.toMutableList()
         val currentActivePlayerUUIDs = currentEntities.filterIsInstance<Player>().mapNotNull { it.uuid }.toSet()
-
         val ghostPlayers = lastKnownPlayerPositions.mapNotNull { (uuid, position) ->
             if (uuid !in currentActivePlayerUUIDs) {
-                val playerInfo = gameDataManager.getPlayerByUUID(uuid)
-                val playerName = playerInfo?.name ?: "Unknown"
+                val playerInMap = level.playerMap[uuid] ?: gameDataManager.getPlayerByUUID(uuid)
+                val playerName = playerInMap?.name ?: "Unknown"
                 val ghostPlayer = Player(0, 0L, uuid, playerName).apply {
                     this.posX = position.x
                     this.posY = position.y
@@ -180,17 +189,20 @@ class NetBound(val luminaRelaySession: LuminaRelaySession) : ComposedPacketHandl
                     this.lastKnownPosition = position
                     this.isDisappeared = true
                 }
+                Log.d("NetBound", "Ghost player: UUID=$uuid, Name=$playerName")
                 ghostPlayer
             } else {
                 null
             }
         }
-        return currentEntities + ghostPlayers
+        val allEntities = currentEntities + ghostPlayers
+        Log.d("NetBound", "Entities for ESP: ${allEntities.size}, Active: ${currentEntities.size}, Ghosts: ${ghostPlayers.size}")
+        return allEntities
     }
 
-    // Added for ESP
     fun clearLastKnownPositions() {
         lastKnownPlayerPositions.clear()
+        Log.d("NetBound", "Cleared last known player positions")
     }
 
     fun getStartGameData(): Map<String, Any?> = gameDataManager.getStartGameData()
@@ -233,7 +245,9 @@ class NetBound(val luminaRelaySession: LuminaRelaySession) : ComposedPacketHandl
     }
 
     fun launchOnMain(block: suspend CoroutineScope.() -> Unit) {
-        mainScope.launch { block() }
+        mainScope.launch {
+            block()
+        }
     }
 
     suspend fun showSessionStatsOverlay(initialStats: List<String>): SessionStatsOverlay =
@@ -267,23 +281,30 @@ class NetBound(val luminaRelaySession: LuminaRelaySession) : ComposedPacketHandl
             try {
                 SpeedometerOverlay.showOverlay()
                 SpeedometerOverlay.updatePosition(position)
-            } catch (e: Exception) {}
+            } catch (e: Exception) {
+            }
         }
     }
 
     fun updatePlayerPosition(x: Float, z: Float) {
         playerPosition = Position(x, z)
-        if (minimapEnabled) scheduleMinimapUpdate()
+        if (minimapEnabled) {
+            scheduleMinimapUpdate()
+        }
     }
 
     fun updatePlayerRotation(yaw: Float) {
         playerRotation = yaw
-        if (minimapEnabled) scheduleMinimapUpdate()
+        if (minimapEnabled) {
+            scheduleMinimapUpdate()
+        }
     }
 
     fun updateEntityPosition(entityId: Long, x: Float, z: Float) {
         entityPositions[entityId] = Position(x, z)
-        if (minimapEnabled && !minimapUpdateScheduled) scheduleMinimapUpdate()
+        if (minimapEnabled && !minimapUpdateScheduled) {
+            scheduleMinimapUpdate()
+        }
     }
 
     fun updateMinimapSize(size: Float) {
@@ -336,7 +357,9 @@ class NetBound(val luminaRelaySession: LuminaRelaySession) : ComposedPacketHandl
                     updateMinimap()
                 }
             } else {
-                mainScope.launch { MiniMapOverlay.setOverlayEnabled(false) }
+                mainScope.launch {
+                    MiniMapOverlay.setOverlayEnabled(false)
+                }
             }
         }
     }
@@ -348,7 +371,12 @@ class NetBound(val luminaRelaySession: LuminaRelaySession) : ComposedPacketHandl
             MiniMapOverlay.overlayInstance.minimapZoom = minimapZoom
             MiniMapOverlay.overlayInstance.minimapDotSize = minimapDotSize
             val targets = entityPositions.values.toList()
-            MiniMapOverlay.setTargets(targets)
+            val finalTargets = if (targets.isEmpty()) {
+                targets
+            } else {
+                targets
+            }
+            MiniMapOverlay.setTargets(finalTargets)
             MiniMapOverlay.showOverlay()
         } catch (e: Exception) {
             e.printStackTrace()
@@ -357,7 +385,9 @@ class NetBound(val luminaRelaySession: LuminaRelaySession) : ComposedPacketHandl
 
     fun clearEntityPositions() {
         entityPositions.clear()
-        if (minimapEnabled) scheduleMinimapUpdate()
+        if (minimapEnabled) {
+            scheduleMinimapUpdate()
+        }
     }
 
     fun showMinimap(centerX: Float, centerZ: Float, targets: List<Position>) {

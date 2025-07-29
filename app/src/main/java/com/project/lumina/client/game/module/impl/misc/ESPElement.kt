@@ -2,10 +2,12 @@ package com.project.lumina.client.game.module.impl.misc
 
 import android.util.Log
 import com.project.lumina.client.R
-import com.project.lumina.client.game.InterceptablePacket
 import com.project.lumina.client.constructors.Element
 import com.project.lumina.client.constructors.CheatCategory
-import com.project.lumina.client.game.entity.*
+import com.project.lumina.client.game.InterceptablePacket
+import com.project.lumina.client.game.entity.Entity
+import com.project.lumina.client.game.entity.Player
+import com.project.lumina.client.game.entity.LocalPlayer
 import com.project.lumina.client.overlay.mods.ESPOverlay
 import org.cloudburstmc.math.vector.Vector3f
 import org.cloudburstmc.protocol.bedrock.packet.PlayerAuthInputPacket
@@ -21,7 +23,7 @@ class ESPElement : Element(
     private var maxTargets = 100
     private var use3dBoxes by boolValue("Use 3D Boxes", false)
     private var showPlayerInfo by boolValue("Show Player Info", true)
-    private var showDisappearedPlayers by boolValue("Save Last Player Position Before Disappearance (Must be active to track positions)", false)
+    private var showDisappearedPlayers by boolValue("Show Disappeared Players(Suitable for 'Block Hunt' on TheHive server)", true)
 
     override fun onEnabled() {
         super.onEnabled()
@@ -93,8 +95,16 @@ class ESPElement : Element(
     private fun Entity.isTarget(): Boolean {
         return when (this) {
             is LocalPlayer -> false
-            is Player -> playersOnly && !isBot
-            else -> false
+            is Player -> playersOnly && !isBot()
+            else -> !playersOnly
         }
+    }
+
+    private fun Player.isBot(): Boolean {
+        if (this is LocalPlayer) return false
+        val playerList = session.level.playerMap[uuid] ?: session.gameDataManager.getPlayerByUUID(uuid)
+        val isBot = playerList?.name?.isBlank() ?: true
+        Log.d("ESPModule", "isBot check: UUID=$uuid, Name=${playerList?.name}, IsBot=$isBot")
+        return isBot
     }
 }
