@@ -5,6 +5,8 @@ import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Color as AndroidColor
 import android.graphics.Paint
+import android.graphics.Rect // Импорт для android.graphics.Rect
+import android.graphics.RectF // Импорт для android.graphics.RectF
 import android.util.AttributeSet
 import android.view.View
 import com.project.lumina.client.game.entity.Entity
@@ -19,6 +21,7 @@ import kotlin.math.sin
 import kotlin.math.sqrt
 import kotlin.math.pow
 import android.util.Log
+import android.os.Build
 
 data class ESPData(
     val playerPosition: Vector3f,
@@ -36,7 +39,33 @@ class CustomESPView @JvmOverloads constructor(
 ) : View(context, attrs, defStyleAttr) {
 
     private var espData: ESPData? = null
-    private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val paint = Paint(Paint.ANTI_ALIAS_FLAG) // Основной Paint для боксов
+
+    // *** Оптимизация: ПРЕДВАРИТЕЛЬНО СОЗДАННЫЕ PAINT ОБЪЕКТЫ ДЛЯ ИНФОРМАЦИИ ОБ СУЩНОСТИ ***
+    private val textInfoPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        textSize = 30f
+        textAlign = Paint.Align.CENTER
+        style = Paint.Style.FILL
+    }
+
+    private val outlineInfoPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = AndroidColor.BLACK // Цвет для обводки текста
+        textSize = 30f
+        textAlign = Paint.Align.CENTER
+        style = Paint.Style.STROKE
+        strokeWidth = 4f
+    }
+
+    private val bgInfoPaint = Paint().apply {
+        color = AndroidColor.argb(160, 0, 0, 0) // Цвет фона для информации
+        style = Paint.Style.FILL
+    }
+    // ************************************************************************************
+
+    // *** Оптимизация: ПЕРЕИСПОЛЬЗУЕМЫЕ Rect и RectF для избежания повторного создания ***
+    private val reusableBgRect = RectF() // Для фона текстовой информации
+    private val reusableTextBounds = Rect() // Для границ текста
+    // **********************************************************************************
 
     init {
         setWillNotDraw(false)
@@ -45,7 +74,7 @@ class CustomESPView @JvmOverloads constructor(
 
     fun updateESPData(data: ESPData) {
         this.espData = data
-        invalidate()
+        invalidate() // Запрашиваем перерисовку
     }
 
     @SuppressLint("DefaultLocale")
@@ -63,6 +92,22 @@ class CustomESPView @JvmOverloads constructor(
         val screenWidth = width.toFloat()
         val screenHeight = height.toFloat()
 
+        // *** Опционально: Логирование размеров Canvas и DisplayCutout для отладки ***
+        /*
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            val insets = rootWindowInsets
+            val displayCutout = insets?.displayCutout
+            if (displayCutout != null) {
+                Log.d("CustomESPView", "Canvas Size: Width=$screenWidth, Height=$screenHeight")
+                Log.d("CustomESPView", "DisplayCutout: Top: ${displayCutout.safeInsetTop}, Bottom: ${displayCutout.safeInsetBottom}")
+                displayCutout.boundingRects.forEachIndexed { index, rect ->
+                    Log.d("CustomESPView", "Cutout Rect $index: ${rect.toShortString()}")
+                }
+            }
+        }
+        */
+        // ******************************************************************************
+
         val viewProjMatrix = Matrix4f.createPerspective(
             fov,
             screenWidth / screenHeight,
@@ -76,9 +121,18 @@ class CustomESPView @JvmOverloads constructor(
                     .invert()
             )
 
+        // *** ДОБАВЛЕНО: Явное отсечение Canvas'а к границам экрана для устранения "визуального мусора" ***
+        canvas.save() // Сохраняем текущее состояние Canvas
+        canvas.clipRect(0f, 0f, screenWidth, screenHeight) // Обрезаем все отрисовки по размеру экрана
+        // **************************************************************************************************
+
         entities.forEach { renderEntity ->
             val entity = renderEntity.entity
-            val username = renderEntity.username?.let { parseColorCodes(it) } ?: ""
+
+            // *** ИСПРАВЛЕНИЕ Окрашивания никнейма: сохраняем оригинальный никнейм для получения цвета ***
+            val originalUsernameWithCodes: String? = renderEntity.username
+            val usernameForDisplay = originalUsernameWithCodes?.let { parseColorCodes(it) } ?: ""
+            // ******************************************************************************************
 
             val renderPosition = if (entity.isDisappeared) entity.lastKnownPosition else entity.vec3Position
 
@@ -146,7 +200,7 @@ class CustomESPView @JvmOverloads constructor(
 
             val color = if (entity.isDisappeared) AndroidColor.argb(150, 255, 0, 255) else getEntityColor(entity)
 
-            paint.color = color
+            paint.color = color // Устанавливаем цвет для основного paint, который используется для боксов
 
             if (data.use3dBoxes) {
                 draw3DBox(canvas, paint, screenPositions)
@@ -154,11 +208,12 @@ class CustomESPView @JvmOverloads constructor(
                 draw2DBox(canvas, paint, minX_screen, minY_screen, maxX_screen, maxY_screen, color)
             }
 
-            if (data.showPlayerInfo && (username.isNotEmpty() || distance > 0)) {
+            if (data.showPlayerInfo && (usernameForDisplay.isNotEmpty() || distance > 0)) {
+                // ИЗМЕНЕНО: Передаем originalUsernameWithCodes и usernameForDisplay
                 drawEntityInfo(
                     canvas,
-                    paint,
-                    username,
+                    originalUsernameWithCodes, // Для получения цвета
+                    usernameForDisplay,        // Для отображения
                     distance,
                     minX_screen,
                     minY_screen,
@@ -167,15 +222,19 @@ class CustomESPView @JvmOverloads constructor(
                 )
             }
         }
+
+        // *** ДОБАВЛЕНО: Восстанавливаем состояние Canvas после отрисовки всех сущностей ***
+        canvas.restore()
+        // ******************************************************************************
     }
 
     private fun parseColorCodes(text: String): String {
-        // Remove Minecraft color codes (e.g., §c, §f) for display
+        // Удаляет Minecraft цветовые коды (например, §c, §f) для отображения
         return text.replace("§[0-9a-fk-orA-FK-OR]".toRegex(), "")
     }
 
     private fun getTextColor(text: String): Int {
-        // Parse Minecraft color codes to determine text color
+        // Разбирает Minecraft цветовые коды для определения цвета текста
         val colorCode = text.substringBefore(":").substringAfterLast("§", "")
         return when (colorCode.lowercase()) {
             "0" -> AndroidColor.BLACK
@@ -194,7 +253,7 @@ class CustomESPView @JvmOverloads constructor(
             "d" -> AndroidColor.MAGENTA
             "e" -> AndroidColor.YELLOW
             "f" -> AndroidColor.WHITE
-            else -> AndroidColor.WHITE
+            else -> AndroidColor.WHITE // Цвет по умолчанию, если код не найден
         }
     }
 
@@ -255,11 +314,13 @@ class CustomESPView @JvmOverloads constructor(
     }
 
     private fun draw2DBox(canvas: Canvas, paint: Paint, minX: Float, minY: Float, maxX: Float, maxY: Float, color: Int) {
+        val originalColor = paint.color
         paint.color = color
         paint.style = Paint.Style.STROKE
         paint.strokeWidth = 3f
         paint.alpha = (0.9f * 255).toInt()
         canvas.drawRect(minX, minY, maxX, maxY, paint)
+        paint.color = originalColor
     }
 
     private fun draw3DBox(canvas: Canvas, paint: Paint, screenPositions: List<Vector2f>) {
@@ -292,37 +353,17 @@ class CustomESPView @JvmOverloads constructor(
     @SuppressLint("DefaultLocale")
     private fun drawEntityInfo(
         canvas: Canvas,
-        paint: Paint,
-        username: String,
+        originalUsername: String?, // Добавлен оригинальный никнейм для получения цвета
+        usernameForDisplay: String, // Очищенный никнейм для отображения
         distance: Float,
         minX: Float,
         minY: Float,
         maxX: Float,
         maxY: Float
     ) {
-        val bgPaint = Paint().apply {
-            color = AndroidColor.argb(160, 0, 0, 0)
-            style = Paint.Style.FILL
-        }
-
-        val outlinePaint = Paint().apply {
-            color = AndroidColor.BLACK
-            textSize = 30f
-            textAlign = Paint.Align.CENTER
-            style = Paint.Style.STROKE
-            strokeWidth = 4f
-        }
-
-        val textPaint = Paint().apply {
-            color = getTextColor(username) // Use color based on Minecraft color code
-            textSize = 30f
-            textAlign = Paint.Align.CENTER
-            style = Paint.Style.FILL
-        }
-
         val info = buildString {
-            if (username.isNotEmpty()) {
-                append(username)
+            if (usernameForDisplay.isNotEmpty()) {
+                append(usernameForDisplay) // Используем очищенный никнейм для отображения
             }
             if (distance > 0) {
                 if (isNotEmpty()) append(" | ")
@@ -332,22 +373,29 @@ class CustomESPView @JvmOverloads constructor(
 
         if (info.isEmpty()) return
 
-        val textX = (minX + maxX) / 2
-        val textY = minY - 10
+        // *** ИСПРАВЛЕНИЕ Окрашивания: получаем цвет из оригинального никнейма ***
+        textInfoPaint.color = getTextColor(originalUsername ?: "")
+        // *********************************************************************
 
-        val bounds = android.graphics.Rect()
-        textPaint.getTextBounds(info, 0, info.length, bounds)
+        val textX = (minX + maxX) / 2
+        val textY = minY - 10 // Базовая линия текста, 10px выше minY бокса
+
+        textInfoPaint.getTextBounds(info, 0, info.length, reusableTextBounds)
 
         val padding = 8f
-        val bgRect = android.graphics.RectF(
-            textX - bounds.width() / 2 - padding,
-            textY - bounds.height() - padding,
-            textX + bounds.width() / 2 + padding,
-            textY + padding
-        )
-        canvas.drawRoundRect(bgRect, 4f, 4f, bgPaint)
+        val textHeight = reusableTextBounds.height().toFloat()
+        val textHalfWidth = reusableTextBounds.width() / 2f
 
-        canvas.drawText(info, textX, textY, outlinePaint)
-        canvas.drawText(info, textX, textY, textPaint)
+        reusableBgRect.set(
+            textX - textHalfWidth - padding,
+            textY - textHeight - padding, // Верхняя граница фона
+            textX + textHalfWidth + padding,
+            textY + padding // Нижняя граница фона (текст + небольшой отступ вниз)
+        )
+
+        canvas.drawRoundRect(reusableBgRect, 4f, 4f, bgInfoPaint)
+
+        canvas.drawText(info, textX, textY, outlineInfoPaint)
+        canvas.drawText(info, textX, textY, textInfoPaint)
     }
 }
