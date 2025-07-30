@@ -26,8 +26,11 @@ abstract class OverlayWindow {
 
     open val layoutParams by lazy {
         LayoutParams().apply {
-            width = LayoutParams.MATCH_PARENT // Используем MATCH_PARENT для ширины
-            height = LayoutParams.MATCH_PARENT // Используем MATCH_PARENT для высоты
+            // *** ВОЗВРАЩАЕМ WRAP_CONTENT для базового OverlayWindow ***
+            width = LayoutParams.WRAP_CONTENT
+            height = LayoutParams.WRAP_CONTENT
+            // **********************************************************
+
             gravity = Gravity.START or Gravity.TOP
             x = 0
             y = 0
@@ -36,7 +39,7 @@ abstract class OverlayWindow {
                     LayoutParams.FLAG_NOT_TOUCH_MODAL or
                     LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH or
                     LayoutParams.FLAG_HARDWARE_ACCELERATED or
-                    LayoutParams.FLAG_LAYOUT_NO_LIMITS or // Это уже есть и хорошо, позволяет окну выходить за пределы
+                    LayoutParams.FLAG_LAYOUT_NO_LIMITS or // Этот флаг важен для всех оверлеев, позволяя им растягиваться
                     LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS or
                     LayoutParams.FLAG_NOT_FOCUSABLE
             format = PixelFormat.TRANSLUCENT
@@ -46,8 +49,10 @@ abstract class OverlayWindow {
                         ?: 1f
             }
 
-            // *** ДОБАВЛЯЕМ КОД ДЛЯ ОБРАБОТКИ ВЫРЕЗА ЭКРАНА ***
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) { // LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS доступен с API 28 (Android P)
+            // *** СОХРАНЯЕМ layoutInDisplayCutoutMode ЗДЕСЬ ***
+            // Это свойство окна, оно должно быть установлено для базового окна,
+            // чтобы система знала, как с ним работать в области выреза.
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
                 layoutInDisplayCutoutMode = LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
             }
             // *************************************************
@@ -56,8 +61,6 @@ abstract class OverlayWindow {
 
     open val composeView by lazy {
         ComposeView(OverlayManager.currentContext!!).apply {
-            // Флаги systemUiVisibility уже хорошо настроены для полноэкранного режима.
-            // Они сообщают системе, что UI должен быть скрыт, и контент должен растянуться.
             systemUiVisibility = (View.SYSTEM_UI_FLAG_LAYOUT_STABLE
                     or View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
                     or View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN

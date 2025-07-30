@@ -29,16 +29,23 @@ class ESPOverlay : OverlayWindow() {
                     WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                     WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
                     WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH or
-                    WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
+                    WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE // Это делает ESP некликабельным
+            
+            // *** ДОБАВЛЯЕМ MATCH_PARENT ЗДЕСЬ ДЛЯ ESPOverlay ***
             width = WindowManager.LayoutParams.MATCH_PARENT
             height = WindowManager.LayoutParams.MATCH_PARENT
+            // **************************************************
+
             gravity = Gravity.TOP or Gravity.START
             format = android.graphics.PixelFormat.TRANSLUCENT
 
-            // *** ДОБАВЛЕННЫЙ КОД ДЛЯ ОБРАБОТКИ ВЫРЕЗА ЭКРАНА ***
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) { // LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS доступен с API 28 (Android P)
-                layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
-            }
+            // *** (Опционально) Можете повторить layoutInDisplayCutoutMode здесь для надежности,
+            // хотя его установка в OverlayWindow должна быть достаточной, так как это свойство окна.
+            // Если после изменений в OverlayWindow и MATCH_PARENT здесь ESP все равно не работает
+            // в вырезе, раскомментируйте этот блок.
+            // if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            //     layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
+            // }
             // ******************************************************
         }
     }
