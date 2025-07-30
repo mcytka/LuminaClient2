@@ -15,6 +15,7 @@ import com.project.lumina.client.game.entity.Player
 import com.project.lumina.client.overlay.manager.OverlayWindow
 import com.project.lumina.client.overlay.manager.OverlayManager
 import org.cloudburstmc.math.vector.Vector3f
+import android.os.Build // Импорт для Build.VERSION_CODES.P
 
 data class ESPRenderEntity(
     val entity: Entity,
@@ -33,6 +34,12 @@ class ESPOverlay : OverlayWindow() {
             height = WindowManager.LayoutParams.MATCH_PARENT
             gravity = Gravity.TOP or Gravity.START
             format = android.graphics.PixelFormat.TRANSLUCENT
+
+            // *** ДОБАВЛЕННЫЙ КОД ДЛЯ ОБРАБОТКИ ВЫРЕЗА ЭКРАНА ***
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) { // LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS доступен с API 28 (Android P)
+                layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
+            }
+            // ******************************************************
         }
     }
 
