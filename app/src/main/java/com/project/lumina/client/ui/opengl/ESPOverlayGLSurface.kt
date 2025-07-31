@@ -23,6 +23,9 @@ class ESPOverlayGLSurface(context: Context) : GLSurfaceView(context) {
         setRenderer(renderer)
         renderMode = RENDERMODE_CONTINUOUSLY
         setZOrderOnTop(true)
+        isFocusable = false
+        isClickable = false
+        isLongClickable = false
     }
 
     // Изменено: теперь принимает List<Entity>
