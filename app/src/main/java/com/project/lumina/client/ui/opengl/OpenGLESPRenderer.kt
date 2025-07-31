@@ -10,24 +10,21 @@ import com.project.lumina.client.game.entity.Entity // Убедитесь, чт�
 import com.project.lumina.client.game.entity.Player // Убедитесь, что Player импортирован
 import com.project.lumina.client.game.entity.LocalPlayer // Убедитесь, что LocalPlayer импортирован
 import com.project.lumina.client.game.entity.Item // Убедитесь, что Item импортирован
-import com.project.lumina.client.overlay.mods.ESPRenderEntity // Убедитесь, что ESPRenderEntity импортирован
 import android.graphics.Color as AndroidColor // Импорт для AndroidColor
 
 object OpenGLESPRenderer {
 
-    // Изменено: теперь принимает List<ESPRenderEntity>
+    // Изменено: теперь принимает List<Entity>
     fun renderESPBoxes(
         viewMatrix: FloatArray,
         projectionMatrix: FloatArray,
-        entities: List<ESPRenderEntity>
+        entities: List<Entity> // Теперь это List<Entity>
     ) {
-        for (renderEntity in entities) { // Итерируемся по ESPRenderEntity
-            val entity = renderEntity.entity // Получаем объект Entity
-
+        for (entity in entities) { // Итерируемся напрямую по Entity
             // Определяем позицию для рендеринга
             val renderPosition = if (entity.isDisappeared) entity.lastKnownPosition else entity.vec3Position
 
-            // Определяем цвет для рендеринга, как в 2D ESP
+            // Определяем цвет для рендеринга (ARGB)
             val color = if (entity.isDisappeared) {
                 // Маджента с alpha 150 (AndroidColor.argb(150, 255, 0, 255))
                 floatArrayOf(AndroidColor.red(AndroidColor.MAGENTA) / 255f, AndroidColor.green(AndroidColor.MAGENTA) / 255f, AndroidColor.blue(AndroidColor.MAGENTA) / 255f, 150f / 255f)
@@ -47,7 +44,7 @@ object OpenGLESPRenderer {
         entityPosition: Vector3f,
         viewMatrix: FloatArray,
         projectionMatrix: FloatArray,
-        color: FloatArray // Новый параметр для цвета
+        color: FloatArray
     ) {
         val modelMatrix = FloatArray(16)
         Matrix.setIdentityM(modelMatrix, 0)
@@ -79,8 +76,6 @@ object OpenGLESPRenderer {
         GLES20.glUseProgram(SimpleShader.program)
 
         GLES20.glUniformMatrix4fv(SimpleShader.uMVPMatrixHandle, 1, false, mvpMatrix, 0)
-        
-        // Устанавливаем цвет через uniform
         GLES20.glUniform4fv(SimpleShader.uColorHandle, 1, color, 0)
 
         GLES20.glEnableVertexAttribArray(SimpleShader.aPositionHandle)

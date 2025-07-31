@@ -10,7 +10,6 @@ import javax.microedition.khronos.opengles.GL10
 import kotlin.math.cos
 import kotlin.math.sin
 import com.project.lumina.client.game.entity.Entity // Убедитесь, что Entity импортирован
-import com.project.lumina.client.overlay.mods.ESPRenderEntity // Убедитесь, что ESPRenderEntity импортирован
 
 class ESPOverlayGLSurface(context: Context) : GLSurfaceView(context) {
 
@@ -26,8 +25,8 @@ class ESPOverlayGLSurface(context: Context) : GLSurfaceView(context) {
         setZOrderOnTop(true)
     }
 
-    // Изменено: теперь принимает List<ESPRenderEntity>
-    fun updateEntities(entities: List<ESPRenderEntity>) {
+    // Изменено: теперь принимает List<Entity>
+    fun updateEntities(entities: List<Entity>) {
         renderer.updateEntities(entities)
     }
 
@@ -39,8 +38,8 @@ class ESPOverlayGLSurface(context: Context) : GLSurfaceView(context) {
         private var playerPos = Vector3f.from(0f, 0f, 0f)
         private var playerPitch: Float = 0f
         private var playerYaw: Float = 0f
-        // Изменено: теперь хранит List<ESPRenderEntity>
-        private var entityList = emptyList<ESPRenderEntity>()
+        // Изменено: теперь хранит List<Entity>
+        private var entityList = emptyList<Entity>()
 
         private val viewMatrix = FloatArray(16)
         private val projectionMatrix = FloatArray(16)
@@ -80,12 +79,12 @@ class ESPOverlayGLSurface(context: Context) : GLSurfaceView(context) {
                 0f, 1f, 0f
             )
 
-            // Изменено: теперь передаем список ESPRenderEntity
+            // Изменено: теперь передаем список Entity
             OpenGLESPRenderer.renderESPBoxes(viewMatrix, projectionMatrix, entityList)
         }
 
-        // Изменено: теперь принимает List<ESPRenderEntity>
-        fun updateEntities(entities: List<ESPRenderEntity>) {
+        // Изменено: теперь принимает List<Entity>
+        fun updateEntities(entities: List<Entity>) {
             this.entityList = entities
         }
 

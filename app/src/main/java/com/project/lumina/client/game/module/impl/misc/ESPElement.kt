@@ -5,41 +5,37 @@ import com.project.lumina.client.R
 import com.project.lumina.client.constructors.Element
 import com.project.lumina.client.constructors.CheatCategory
 import com.project.lumina.client.game.InterceptablePacket
-import com.project.lumina.client.game.entity.*
-import com.project.lumina.client.overlay.manager.OverlayManager // Используем OverlayManager
-import com.project.lumina.client.ui.opengl.ESPOverlayGLSurface // Импортируем вашу OpenGL поверхность
+import com.project.lumina.client.game.entity.* // Импорт всех классов сущностей
+import com.project.lumina.client.overlay.manager.OverlayManager
+import com.project.lumina.client.ui.opengl.ESPOverlayGLSurface // Импортируем нашу OpenGL поверхность
+// import com.project.lumina.client.overlay.mods.ESPRenderEntity // Эту строку теперь можно удалить
 import org.cloudburstmc.math.vector.Vector3f
 import org.cloudburstmc.protocol.bedrock.packet.PlayerAuthInputPacket
-import java.util.UUID
-import com.project.lumina.client.application.AppContext // Для AppContext.instance
+import com.project.lumina.client.application.AppContext
 
 class ESPElement : Element(
-    name = "ESP", // Название модуля
+    name = "ESP",
     category = CheatCategory.Misc,
     displayNameResId = R.string.module_esp_display_name
 ) {
     private var playersOnly by boolValue("Players", true)
     private var rangeValue by floatValue("Range", 25f, 2f..500f)
-    private var multiTarget = true // В текущей реализации не используется, но оставлено
+    private var multiTarget = true
     private var maxTargets = 100
-    // Удаляем use3dBoxes и showPlayerInfo, так как OpenGL всегда рисует 3D-боксы, а инфо игрока - это 2D-оверлей.
     private var showDisappearedPlayers by boolValue(
         "Show Disappeared Players(Suitable for 'Block Hunt' on TheHive server)",
         true
     )
 
-    // Инициализируем glSurface здесь, чтобы он был доступен
     private var glSurface: ESPOverlayGLSurface? = null
 
     override fun onEnabled() {
         super.onEnabled()
         try {
             if (isSessionCreated && AppContext.instance != null) {
-                // Создаем GLSurfaceView при включении модуля
                 glSurface = ESPOverlayGLSurface(AppContext.instance)
-                // Показываем наш кастомный оверлей OpenGL
                 OverlayManager.showCustomOverlay(glSurface!!)
-                Log.d("ESPModule", "ESP Overlay enabled")
+                Log.d("ESPModule", "ESP Overlay enabled (OpenGL)")
             } else {
                 Log.e("ESPModule", "Session not created or AppContext not available, cannot enable ESP overlay.")
             }
@@ -50,22 +46,18 @@ class ESPElement : Element(
 
     override fun onDisabled() {
         super.onDisabled()
-        // Скрываем и очищаем GLSurfaceView при отключении модуля
         glSurface?.let {
             OverlayManager.dismissCustomOverlay(it)
-            Log.d("ESPModule", "ESP Overlay disabled")
+            Log.d("ESPModule", "ESP Overlay disabled (OpenGL)")
         }
-        glSurface = null // Очищаем ссылку
+        glSurface = null
         if (isSessionCreated) {
             session.clearLastKnownPositions()
         }
     }
 
     override fun beforePacketBound(interceptablePacket: InterceptablePacket) {
-        if (!isEnabled || !isSessionCreated) return
-
-        // Фильтруем только пакеты ввода игрока, как это было в вашей старой версии для PlayerAuthInputPacket
-        if (interceptablePacket.packet !is PlayerAuthInputPacket) return
+        if (!isEnabled || !isSessionCreated || interceptablePacket.packet !is PlayerAuthInputPacket) return
 
         val currentLocalPlayer = session.localPlayer
         if (currentLocalPlayer != null) {
@@ -74,28 +66,13 @@ class ESPElement : Element(
             val rotationPitch = currentLocalPlayer.rotationPitch
 
             glSurface?.let {
-                // Обновляем позицию и вращение игрока в GLSurfaceView
                 it.updatePlayerPositionAndRotation(position, rotationPitch, rotationYaw)
-                // Обновляем сущности, используя вашу логику getEntitiesToRender()
-                it.updateEntities(getEntitiesToRender().map { entity ->
-                    // Мы не можем напрямую передать List<Entity>, OpenGL ESP ожидает List<ESPRenderEntity>
-                    // или List<Entity> если вы соответствующим образом изменили ESPOverlayGLSurface.kt
-                    // Предполагается, что getEntitiesToRender() возвращает List<Entity>
-                    // и ESPOverlayGLSurface.updateEntities теперь принимает List<ESPRenderEntity>
-                    // Если у вас ESPRenderEntity - это обертка Entity, как в CustomESPView,
-                    // то вам нужно создать такую обертку здесь.
-                    // Если ESPOverlayGLSurface.updateEntities ждет List<Entity>, то map не нужен.
-
-                    // ИСПОЛЬЗУЕМ ESPRenderEntity, как мы договорились, чтобы сохранить Ghost-логику:
-                    ESPRenderEntity(entity, renderEntity.username) // Если у ESPRenderEntity есть username
-                    // Если у ESPRenderEntity только Entity:
-                    // ESPRenderEntity(entity)
-                })
+                // ИСПРАВЛЕНИЕ: Передаем List<Entity> напрямую, без преобразования в ESPRenderEntity
+                it.updateEntities(getEntitiesToRender())
             }
         }
     }
 
-    // Этот метод скопирован полностью из вашей текущей 2D-версии ESPElement
     private fun getEntitiesToRender(): List<Entity> {
         if (!isSessionCreated) return emptyList()
         val allEntities = session.getAllEntitiesForEsp()
@@ -103,36 +80,35 @@ class ESPElement : Element(
         return allEntities
             .filter { entity ->
                 if (entity is LocalPlayer && entity.uniqueEntityId == session.localPlayer.uniqueEntityId) {
-                    false // Игнорируем самого локального игрока
+                    false
                 } else {
                     if (!showDisappearedPlayers && entity.isDisappeared) {
-                        false // Если не показываем исчезнувших и сущность исчезла, фильтруем
+                        false
                     } else {
                         val distance = if (entity.isDisappeared) {
                             entity.lastKnownPosition.distance(session.localPlayer.vec3Position)
                         } else {
                             entity.distance(session.localPlayer)
                         }
-                        distance < rangeValue && entity.isTarget() // Проверяем дистанцию и цель
+                        distance < rangeValue && entity.isTarget()
                     }
                 }
             }
-            .sortedBy { entity -> // Сортируем по дистанции
+            .sortedBy { entity ->
                 if (entity.isDisappeared) {
                     entity.lastKnownPosition.distance(session.localPlayer.vec3Position)
                 } else {
                     entity.distance(session.localPlayer)
                 }
             }
-            .take(maxTargets) // Ограничиваем количество целей
+            .take(maxTargets)
     }
 
-    // Эти вспомогательные методы также скопированы из вашей текущей 2D-версии
     private fun Entity.isTarget(): Boolean {
         return when (this) {
             is LocalPlayer -> false
             is Player -> playersOnly && !isBot()
-            else -> false // Только игроки, если playersOnly
+            else -> false
         }
     }
 
