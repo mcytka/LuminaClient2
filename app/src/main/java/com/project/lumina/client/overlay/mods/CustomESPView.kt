@@ -49,7 +49,7 @@ class CustomESPView @JvmOverloads constructor(
         style = Paint.Style.FILL
     }
 
-    private val outlineInfoPaint = Paint(Paint.ANTI_ALIAS_FLAT_TEXT_FLAG).apply { // Использовал _TEXT_FLAG, тут была опечатка, должно быть ANTI_ALIAS_FLAG
+    private val outlineInfoPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = AndroidColor.BLACK
         textSize = 30f
         textAlign = Paint.Align.CENTER
